@@ -16,8 +16,6 @@ class Trainer_pytorch():
         self.scheduler = None
         self.best_acc = 0
 
-        self.best_valid_loss = float("inf")
-        self.best_acc = 0.0
         self.early_stopping_patience = early_stopping_patience
         self.early_stopping_min_delta = early_stopping_min_delta
         self.early_stopping_counter = 0
@@ -80,43 +78,31 @@ class Trainer_pytorch():
             self.valid_accuracy_history.append(valid_accuracy)
 
         # Save checkpoint.
-        acc = 100.*correct/total
-        if acc > self.best_acc:
+        if valid_accuracy > self.best_acc + self.early_stopping_min_delta:
             print('Saving..')
             state = {
                 'net': model.state_dict(),
-                'acc': acc,
+                'valid_accuracy': valid_accuracy,
                 'epoch': epoch,
             }
             os.makedirs(os.path.join(model_directory, model_name, "checkpoint"), exist_ok=True)
             torch.save(state, os.path.join(model_directory, model_name, './checkpoint/ckpt.pth'))
-            self.best_acc = acc
+            self.best_acc = valid_accuracy
+            self.early_stopping_counter = 0
+            print(f'Saving best checkpoint.. best_accuracy: {valid_accuracy:.6f}')    
 
             torch.save({
             'train_loss_history': self.train_loss_history,
             'train_accuracy_history': self.train_accuracy_history,
             'valid_loss_history': self.valid_loss_history,
             'valid_accuracy_history': self.valid_accuracy_history,
-            }, os.path.join(model_directory,'history.pth'))      
+            }, os.path.join(model_directory,'history.pth')) 
 
-        improved = valid_loss < (self.best_valid_loss - self.early_stopping_min_delta)
-        if improved:
-            print(f'Saving best checkpoint.. valid_loss: {valid_loss:.6f}, valid_acc: {valid_accuracy:.4f}')
-            state = {
-                'net': model.state_dict(),
-                'valid_loss': valid_loss,
-                'acc': valid_accuracy,
-                'epoch': epoch,
-            }
-            torch.save(state, os.path.join(model_directory, model_name, 'checkpoint', 'ckpt.pth'))
-            self.best_valid_loss = valid_loss
-            self.best_acc = valid_accuracy
-            self.early_stopping_counter = 0
         else:
             self.early_stopping_counter += 1
             print(
                 f'EarlyStopping counter: {self.early_stopping_counter}/'
-                f'{self.early_stopping_patience} | best_valid_loss: {self.best_valid_loss:.6f}')
+                f'{self.early_stopping_patience} | best_valid_accuracy: {self.best_acc:.6f}')
 
         should_stop = self.early_stopping_counter >= self.early_stopping_patience
         return valid_loss, valid_accuracy, should_stop
@@ -146,16 +132,37 @@ class Trainer_pytorch():
         else:
             print("Warning: best checkpoint not found. Testing current model state.")
 
-        test_loss, test_acc, y_true, y_pred = self._evaluate(
-            model, test_loader, loss_function, device, phase_name="Test"
-        )
+        model.eval()
 
-        report_dict = classification_report(
-            y_true, y_pred, target_names=class_names, digits=4, zero_division=0, output_dict=True
-        )
-        report_text = classification_report(
-            y_true, y_pred, target_names=class_names, digits=4, zero_division=0
-        )
+        test_loss = 0
+        correct = 0
+        total = 0
+        y_true = []
+        y_pred = []
+        with torch.no_grad():
+            for batch_idx, batch in enumerate(test_loader):
+                input_ids = batch['input_ids'].to(device)
+                attention_mask = batch['attention_mask'].to(device)
+                labels = batch['label'].to(device)
+                outputs = model(input_ids, attention_mask)
+                loss = loss_function(outputs, labels)
+
+                test_loss += loss.item()
+                _, predicted = outputs.max(1)
+                total += labels.size(0)
+                correct += predicted.eq(labels).sum().item()
+                test_accuracy = 100.*correct/total
+
+                y_true.extend(labels.detach().cpu().tolist())
+                y_pred.extend(predicted.detach().cpu().tolist())
+
+                progress_bar(batch_idx, len(test_loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                            % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
+            self.valid_loss_history.append(test_loss)
+            self.valid_accuracy_history.append(test_accuracy)
+
+        report_dict = classification_report(y_true, y_pred, target_names=class_names, digits=4, zero_division=0, output_dict=True)
+        report_text = classification_report( y_true, y_pred, target_names=class_names, digits=4, zero_division=0)
         cm = confusion_matrix(y_true, y_pred).tolist()
 
         result_dir = os.path.join(model_directory, model_name, 'test_result')
@@ -163,7 +170,7 @@ class Trainer_pytorch():
 
         with open(os.path.join(result_dir, 'test_report.txt'), 'w', encoding='utf-8') as f:
             f.write(f"Test Loss: {test_loss:.6f}\n")
-            f.write(f"Test Accuracy: {test_acc:.4f}\n\n")
+            f.write(f"Test Accuracy: {test_accuracy:.4f}\n\n")
             f.write(report_text)
             f.write("\nConfusion Matrix:\n")
             f.write(str(cm))
@@ -171,21 +178,21 @@ class Trainer_pytorch():
         with open(os.path.join(result_dir, 'test_result.json'), 'w', encoding='utf-8') as f:
             json.dump({
                 'test_loss': test_loss,
-                'test_accuracy': test_acc,
+                'test_accuracy': test_accuracy,
                 'classification_report': report_dict,
                 'confusion_matrix': cm,
                 'class_names': class_names,
             }, f, ensure_ascii=False, indent=2)
 
         with open(os.path.join(result_dir, 'test_predictions.csv'), 'w', encoding='utf-8') as f:
-            f.write('y_true,y_pred\n')
+            f.write('y_true,y_pred,true_label,pred_label\n')
             for t, p in zip(y_true, y_pred):
-                f.write(f'{t},{p}\n')
+                f.write(f'{t},{p},{class_names[t]},{class_names[p]}\n')
 
-        print(f"Test Accuracy: {test_acc:.4f}")
+        print(f"Test Accuracy: {test_accuracy:.4f}")
         print(report_text)
         print(f"Saved test results to: {result_dir}")
-        return test_loss, test_acc
+        return test_loss, test_accuracy
             
 class Trainer_sklearn():
     def __init__(self):

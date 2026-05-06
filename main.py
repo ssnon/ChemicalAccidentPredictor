@@ -29,9 +29,9 @@ parser.add_argument('--model', default='kobert', type=str,
 parser.add_argument('--model_directory', default="training_result", type=str,
                     help='model training result directory')
 parser.add_argument('--early_stopping_patience', default=3, type=int,
-                    help='stop training if validation loss does not improve for this many epochs')
+                    help='stop training if validation accuracy does not improve for this many epochs')
 parser.add_argument('--early_stopping_min_delta', default=0.0, type=float,
-                    help='minimum validation loss improvement required to reset early stopping counter')
+                    help='minimum validation accuracy improvement required to reset early stopping counter')
 
 args = parser.parse_args()
 utils.seed_everything(args.seed)
@@ -44,7 +44,7 @@ def run_kobert(trainer):
         trainer.train(epoch, model, train_loader, criterion, device)
         valid_loss, valid_acc, should_stop = trainer.valid(epoch, model, valid_loader, criterion, device, args.model_directory, args.model)
         if should_stop:
-            print(f"Early stopping triggered at epoch {epoch}. Best valid loss: {trainer.best_valid_loss:.6f}")
+            print(f"Early stopping triggered at epoch {epoch}. Best valid accuracy: {trainer.valid_acc:.6f}")
             break
         
     trainer.test(model, test_loader, criterion, device, args.model_directory, args.model, class_names)

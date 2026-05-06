@@ -4,7 +4,6 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader, Dataset
 from transformers import BertTokenizer, AutoTokenizer
-from sklearn.preprocessing import LabelEncoder
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 class BERTDataset(Dataset):
@@ -37,32 +36,49 @@ def data_load_and_preprocess(data_root_path, train_file_name, valid_file_name, t
     if test_file_name is not None:
         test_df = pd.read_csv(os.path.join(data_root_path, test_file_name), encoding="utf-8")
 
-    X_train_text = train_df["text"]
-    y_train_text = train_df["label"]
+    X_train_text = train_df["text"].astype(str)
+    y_train_text = train_df["label"].astype(str).str.strip()
 
-    X_valid_text = valid_df["text"]
-    y_valid_text = valid_df["label"]
+    X_valid_text = valid_df["text"].astype(str)
+    y_valid_text = valid_df["label"].astype(str).str.strip()
 
-    if test_df is not None:
+    if test_file_name is not None:
         X_test_text = test_df["text"].astype(str)
         y_test_text = test_df["label"].astype(str).str.strip()
 
     # ======= 2. 레이블 인코딩 =======
-    custom_class_order = ['안전기준 미준수', '운송차량', '시설 결함']
-    mapping = {
-        '안전기준 미준수': 'C₁',
-        '운송차량': 'C₂',
-        '시설 결함': 'C₃'
+    label_to_id = {
+        '시설 결함': 0,
+        '안전기준 미준수': 1,
+        '운송차량': 2
     }
 
-    label_encoder = LabelEncoder()
-    label_encoder.fit(custom_class_order)
-    y_train = label_encoder.transform(y_train_text)
-    y_valid = label_encoder.transform(y_valid_text)
-    if test_df is not None:
-        y_test = label_encoder.transform(y_test_text)
+    id_to_label = {
+        0: '시설 결함',
+        1: '안전기준 미준수',
+        2: '운송차량'
+    }
 
-    class_names = [mapping[c] for c in custom_class_order]
+    class_names = ['C₁_시설_결함', 'C₂_안전기준_미준수', 'C₃_운송차량']
+
+    unknown_train = set(y_train_text) - set(label_to_id.keys())
+    unknown_valid = set(y_valid_text) - set(label_to_id.keys())
+
+    if unknown_train:
+        raise ValueError(f"Unknown train labels: {unknown_train}")
+
+    if unknown_valid:
+        raise ValueError(f"Unknown valid labels: {unknown_valid}")
+
+    
+    y_train = y_train_text.map(label_to_id).to_numpy()
+    y_valid = y_valid_text.map(label_to_id).to_numpy()
+
+    if test_file_name is not None:
+        unknown_test = set(y_test_text) - set(label_to_id.keys())
+        if unknown_test:
+            raise ValueError(f"Unknown test labels: {unknown_test}")
+        y_test = y_test_text.map(label_to_id).to_numpy()
 
     # ======= 3. 불용어 로드 =======
     path = os.path.join(data_root_path, 'korean_stopwords.txt')
@@ -82,7 +98,7 @@ def data_load_and_preprocess(data_root_path, train_file_name, valid_file_name, t
     X_train_cleaned = X_train_text.apply(preprocess)
     X_valid_cleaned = X_valid_text.apply(preprocess)
 
-    if test_df is None:
+    if test_file_name is None:
         return X_train_cleaned, y_train, X_valid_cleaned, y_valid, class_names
 
     X_test_cleaned = X_test_text.apply(preprocess)
