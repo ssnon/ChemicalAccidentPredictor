@@ -1,0 +1,10 @@
+jupyter nbconvert \
+  --to notebook \
+  --execute kobert.ipynb \
+  --output kobert_executed.ipynb \
+  --ExecutePreprocessor.kernel_name=kiwook_kobert \
+  --ExecutePreprocessor.timeout=-1
+
+python main.py --data_directory='/home/hpc-ssu/PythonProjects/mimic_preprocessing/hajin/ChemicalAccident-test/kiwook/python/dataset/' --train_file='train/train.csv' --valid_file='valid/valid.csv'
+
+python main.py --data_directory='/home/hpc-ssu/PythonProjects/mimic_preprocessing/hajin/ChemicalAccident-test/data' --train_file='train.csv' --valid_file='test.csv' --model='RF' --seed=99
