@@ -3,6 +3,7 @@ import torch
 import torch.optim as optim
 from utils import progress_bar
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from transformers import get_linear_schedule_with_warmup, get_cosine_schedule_with_warmup
 import joblib
 import json
 
@@ -37,6 +38,8 @@ class Trainer_pytorch():
                 loss = loss_function(outputs, labels)
                 loss.backward()
                 self.optimizer.step()
+                if self.scheduler is not None:
+                    self.scheduler.step()
 
                 train_loss += loss.item()
                 _, predicted = outputs.max(1)
@@ -48,9 +51,6 @@ class Trainer_pytorch():
                             % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))        
             self.train_loss_history.append(train_loss)
             self.train_accuracy_history.append(train_accuracy)
-
-            if self.scheduler is not None:
-                self.scheduler.step()
             
     def valid(self, epoch, model, valid_loader, loss_function, device, model_directory, model_name):
         model.eval()
@@ -107,21 +107,66 @@ class Trainer_pytorch():
         should_stop = self.early_stopping_counter >= self.early_stopping_patience
         return valid_loss, valid_accuracy, should_stop
 
-    def prepare_optimizer(self, model, optimizer_name, learning_rate):
+    def prepare_optimizer(
+        self,
+        model,
+        optimizer_name,
+        learning_rate,
+        weight_decay=0.01,
+        scheduler_name="linear_warmup",
+        total_training_steps=None,
+        warmup_ratio=0.1,):
+        self.scheduler = None
         if optimizer_name == "sgd":
-            self.optimizer = optim.SGD(model.parameters(), lr=learning_rate, weight_decay=5e-4)
-            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=200)
+            self.optimizer = optim.SGD(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
         elif optimizer_name == "adam":
-            self.optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+            self.optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
         elif optimizer_name == "adamW":
-            self.optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
+            no_decay = ["bias", "LayerNorm.weight"]
+
+            optimizer_grouped_parameters = [
+                {
+                    "params": [
+                        p for n, p in model.named_parameters()
+                        if not any(nd in n for nd in no_decay)
+                    ],
+                    "weight_decay": weight_decay,
+                },
+                {
+                    "params": [
+                        p for n, p in model.named_parameters()
+                        if any(nd in n for nd in no_decay)
+                    ],
+                    "weight_decay": 0.0,
+                },
+            ]
+
+            self.optimizer = optim.AdamW(optimizer_grouped_parameters, lr=learning_rate)
         else:
             raise ValueError(f"Unknown optimizer: {optimizer_name}")
         
-        if self.scheduler is not None:
-            return self.optimizer, self.scheduler
+        if scheduler_name == "none":
+                self.scheduler = None
         else:
-            return self.optimizer           
+            if total_training_steps is None:
+                raise ValueError("total_training_steps must be provided when using a scheduler.")
+
+            warmup_steps = int(total_training_steps * warmup_ratio)
+
+            if scheduler_name == "linear_warmup":
+                self.scheduler = get_linear_schedule_with_warmup(
+                    self.optimizer,
+                    num_warmup_steps=warmup_steps,
+                    num_training_steps=total_training_steps)
+            elif scheduler_name == "cosine":
+                self.scheduler = get_cosine_schedule_with_warmup(
+                    self.optimizer,
+                    num_warmup_steps=warmup_steps,
+                    num_training_steps=total_training_steps)
+            else:
+                raise ValueError(f"Unknown scheduler: {scheduler_name}")
+
+        return self.optimizer   
 
     def test(self, model, test_loader, loss_function, device, model_directory, model_name, class_names):
         checkpoint_path = os.path.join(model_directory, model_name, 'checkpoint', 'ckpt.pth')

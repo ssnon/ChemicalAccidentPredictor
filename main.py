@@ -32,19 +32,34 @@ parser.add_argument('--early_stopping_patience', default=3, type=int,
                     help='stop training if validation accuracy does not improve for this many epochs')
 parser.add_argument('--early_stopping_min_delta', default=0.0, type=float,
                     help='minimum validation accuracy improvement required to reset early stopping counter')
+parser.add_argument('--weight_decay', default=0.01, type=float,
+                    help='weight decay for optimizer')
+parser.add_argument('--scheduler', default='linear_warmup', type=str,
+                    choices=['none', 'linear_warmup', 'cosine'],
+                    help='scheduler type')
+parser.add_argument('--warmup_ratio', default=0.1, type=float,
+                    help='warmup ratio for linear/cosine scheduler')
 
 args = parser.parse_args()
 utils.seed_everything(args.seed)
 
 def run_kobert(trainer):
-    train_dataset, valid_dataset, test_dataset, train_loader, valid_loader, test_loader, class_names = datasets.prepare_dataset_kobert(args.data_directory, args.train_file, args.valid_file, args.test_file, args.seed)
+    train_dataset, valid_dataset, test_dataset, train_loader, valid_loader, test_loader, class_names = datasets.prepare_dataset_kobert(
+        args.data_directory, args.train_file, args.valid_file, args.test_file, args.seed)
     model = models.prepare_model(args.model, device, seed=args.seed)
-    trainer.prepare_optimizer(model, args.optimizer, args.lr)
+
+    total_training_steps = len(train_loader) * args.epoch
+    trainer.prepare_optimizer(model, args.optimizer, args.lr,
+    weight_decay=args.weight_decay,
+    scheduler_name=args.scheduler,
+    total_training_steps=total_training_steps,
+    warmup_ratio=args.warmup_ratio)
+    
     for epoch in range(start_epoch, start_epoch+args.epoch):
         trainer.train(epoch, model, train_loader, criterion, device)
         valid_loss, valid_acc, should_stop = trainer.valid(epoch, model, valid_loader, criterion, device, args.model_directory, args.model)
         if should_stop:
-            print(f"Early stopping triggered at epoch {epoch}. Best valid accuracy: {trainer.valid_acc:.6f}")
+            print(f"Early stopping triggered at epoch {epoch}. Best valid accuracy: {valid_acc:.6f}")
             break
         
     trainer.test(model, test_loader, criterion, device, args.model_directory, args.model, class_names)
