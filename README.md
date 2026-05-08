@@ -22,7 +22,7 @@
 #### to analysis model, use
 - ./run_analysis.sh
 
-#### Networks
+## Networks
 - Logistic Re (link)
 - Random Forest (link)
 - SVM (link)
