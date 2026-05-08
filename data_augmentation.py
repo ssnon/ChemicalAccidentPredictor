@@ -7,12 +7,25 @@ from googletrans import Translator
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 from difflib import SequenceMatcher
+import argparse
+import os
 
-# Jupyter 환경 이벤트 루프 문제 해결
-nest_asyncio.apply()
+parser = argparse.ArgumentParser(description='data augmentation through back translation')
+parser.add_argument('--data_directory', default="dataset/", type=str,
+                    help='data directory')
+parser.add_argument('--input_file_name', default="train/train_raw.csv", type=str,
+                    help='augmentation target')
+parser.add_argument('--output_file_name', default="train/train.csv", type=str,
+                    help='augmentation result')
+parser.add_argument('--aug_ratio', default=1.3, type=float,
+                    help='augmentation ratio')
+parser.add_argument('--cossim_threshold', default=0.9, type=float,
+                    help='augmentation acceptance threshold')
 
+
+args = parser.parse_args()
 # CSV 파일 로드
-csv_path = '/home/hpc-ssu/PythonProjects/mimic_preprocessing/hajin/ChemicalAccident-test/kiwook/python/dataset/train/train.csv'
+csv_path = os.path.join(args.data_directory, args.input_file_name)
 df = pd.read_csv(csv_path)
 
 # Google 번역기 초기화
@@ -29,15 +42,15 @@ def text_similarity(a, b):
 
 
 async def main():
-    target_ratio = 1.3
-    similarity_threshold = 0.9
+    #target_ratio = 1.3
+    #similarity_threshold = 0.9
     # C1(시설 결함)에 해당하는 텍스트만 추출 / C2(안전기준 미준수)
     df_transport = df[df['label'] == '시설 결함']
     texts = df_transport['text'].tolist()  # 실제 텍스트 컬럼명 사용
     
     print(f"원본 문장 수: {len(texts)}")
   
-    needed = int(len(texts) * target_ratio - len(texts))
+    needed = int(len(texts) * args.aug_ratio - len(texts))
     print(f"필요한 증강 수: {needed}")
 
     augmented_rows = []
@@ -53,7 +66,7 @@ async def main():
             sim = text_similarity(original, bt)
 
             # 너무 달라진 문장은 제외
-            if sim < similarity_threshold:
+            if sim < args.cossim_threshold:
                 print(f"low similarity, sim : {sim}")
                 continue
 
@@ -76,7 +89,7 @@ async def main():
     texts = df_transport['text'].tolist()  # 실제 텍스트 컬럼명 사용
 
     print(f"원본 문장 수: {len(texts)}")
-    needed = int(len(texts) * target_ratio - len(texts))
+    needed = int(len(texts) * args.aug_ratio - len(texts))
     print(f"필요한 증강 수: {needed}")
 
     generated = 0
@@ -91,7 +104,7 @@ async def main():
             sim = text_similarity(original, bt)
 
             # 너무 달라진 문장은 제외
-            if sim < similarity_threshold:
+            if sim < args.cossim_threshold:
                 continue
 
             augmented_rows.append({
@@ -120,7 +133,7 @@ async def main():
     )
 
     df_combined.to_csv(
-        '/home/hpc-ssu/PythonProjects/mimic_preprocessing/hajin/ChemicalAccident-test/kiwook/python/dataset/train/train_combined.csv',
+        os.path.join(args.data_directory, args.output_file_name),
         index=False,
         encoding='utf-8-sig'
     )

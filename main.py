@@ -7,7 +7,7 @@ import datasets
 import training_utils
 import utils
 
-parser = argparse.ArgumentParser(description='Imbalance data classifier for antibiotic-resistance in MIMIC-iv,-iii')
+parser = argparse.ArgumentParser(description='Chemical Accident Predictor')
 parser.add_argument('--seed', default=42, type=int,
                     help='seed')
 parser.add_argument('--data_directory', default="../data", type=str,

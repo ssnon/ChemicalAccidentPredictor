@@ -11,9 +11,9 @@
 #### pip install -r requirements.txt
 
 ## Dataset
-#### we use chemical accident dataset which provided by National Institute of Chemical Safety(NICS).
+#### We used the chemical accident dataset provided by the National Institute of Chemical Safety(NICS).
 #### link : https://www.data.go.kr/data/15069200/fileData.do#
-#### each train, val, test data should be located in dataset/train/train.csv, dataset/valid/valid.csv and dataset/test/test.csv repectively.
+#### Each train, val, test data should be located in dataset/train/train.csv, dataset/valid/valid.csv and dataset/test/test.csv respectively.
 
 ## command
 #### to train model, use
@@ -28,6 +28,11 @@
 - lime_analysis_kobert.py --data_directory="your_directory" --model="model_name"
 - lime_analysis_classicML.py --data_directory="your_directory" --model="model_name"
 - you can see more arguments in lime_analysis_kobert.py and lime_analysis_classicML.py
+
+#### to use augmentation, use
+- data_augmentation.py
+- with arguments, dataset path, augmentation ratio, and cossim threshold.
+- you can see arguments in data_augmentation.py
 
 ## Networks
 - [Logistic Regression](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LogisticRegression.html)
