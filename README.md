@@ -30,8 +30,8 @@
 - you can see more arguments in lime_analysis_kobert.py and lime_analysis_classicML.py
 
 ## Networks
-- Logistic Regression ![](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LogisticRegression.html)
-- Random Forest ![](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html)
-- SVM ![](https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html)
-- XGBoost ![](https://xgboost.readthedocs.io/en/latest/python/python_api.html)
-- Kobert ![](https://github.com/SKTBrain/KoBERT)
+- [Logistic Regression](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LogisticRegression.html)
+- [Random Forest](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html)
+- [SVM](https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html)
+- [XGBoost](https://xgboost.readthedocs.io/en/latest/python/python_api.html)
+- [Kobert](https://github.com/SKTBrain/KoBERT)
