@@ -3,7 +3,7 @@ set -e
 
 export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:${LD_LIBRARY_PATH:-}"
 
-DATA_DIR="/home/hpc-ssu/PythonProjects/mimic_preprocessing/hajin/ChemicalAccident-test/kiwook/python/dataset/"
+DATA_DIR="dataset/"
 TEST_FILE="test/test.csv"
 
 MODEL_NAME="kobert"

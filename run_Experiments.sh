@@ -4,7 +4,7 @@ set -e
 # JPype / KoNLPy libstdc++ ������ ��ȸ�ߴ� ������ �ʿ��ϸ� ����
 export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:${LD_LIBRARY_PATH:-}"
 
-DATA_DIR="/home/hpc-ssu/PythonProjects/mimic_preprocessing/hajin/ChemicalAccident-test/kiwook/python/dataset/"
+DATA_DIR="dataset/"
 TRAIN_FILE="train/train.csv"
 VALID_FILE="valid/valid.csv"
 TEST_FILE="test/test.csv"
