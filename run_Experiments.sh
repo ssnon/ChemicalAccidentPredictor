@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -e
 
-# JPype / KoNLPy libstdc++ ¹®Á¦¸¦ ¿ìÈ¸Çß´ø ¼³Á¤ÀÌ ÇÊ¿äÇÏ¸é À¯Áö
+# JPype / KoNLPy libstdc++ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½È¸ï¿½ß´ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ê¿ï¿½ï¿½Ï¸ï¿½ ï¿½ï¿½ï¿½ï¿½
 export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:${LD_LIBRARY_PATH:-}"
 
 DATA_DIR="/home/hpc-ssu/PythonProjects/mimic_preprocessing/hajin/ChemicalAccident-test/kiwook/python/dataset/"
-TRAIN_FILE="train/train_combined.csv"
+TRAIN_FILE="train/train.csv"
 VALID_FILE="valid/valid.csv"
 TEST_FILE="test/test.csv"
 
