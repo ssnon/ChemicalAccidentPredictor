@@ -30,8 +30,7 @@
 - you can see more arguments in lime_analysis_kobert.py and lime_analysis_classicML.py
 
 #### to use augmentation, use
-- data_augmentation.py
-- with arguments, dataset path, augmentation ratio, and cossim threshold.
+- data_augmentation.py --data_directory="your_data_directory_path" --input_file_name"your_input_file_name.csv" --output_file_name="your_output_file_name.csv" --aug_ratio=your_ratio --cossim_threshold=your_threshold
 - you can see arguments in data_augmentation.py
 
 ## Networks
