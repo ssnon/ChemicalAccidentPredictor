@@ -45,7 +45,7 @@ async def main():
 
     while generated < needed:
         original = random.choice(texts)
-
+        
         try:
             bt = await back_translate_google_async(original)
             await asyncio.sleep(1)
@@ -54,6 +54,7 @@ async def main():
 
             # 너무 달라진 문장은 제외
             if sim < similarity_threshold:
+                print(f"low similarity, sim : {sim}")
                 continue
 
             augmented_rows.append({
@@ -112,8 +113,17 @@ async def main():
     print(f"최종 증강 문장 수: {len(augmented_rows)}")
 
     df_aug = pd.DataFrame(augmented_rows)
-    df_aug.to_csv('/home/hpc-ssu/PythonProjects/mimic_preprocessing/hajin/ChemicalAccident-test/kiwook/python/dataset/train/train_augmented.csv', index=False, encoding='utf-8-sig')
+    # 원본 train.csv와 같은 컬럼만 사용
+    df_combined = pd.concat(
+        [df[['text', 'label']], df_aug[['text', 'label']]],
+        ignore_index=True
+    )
 
+    df_combined.to_csv(
+        '/home/hpc-ssu/PythonProjects/mimic_preprocessing/hajin/ChemicalAccident-test/kiwook/python/dataset/train/train_combined.csv',
+        index=False,
+        encoding='utf-8-sig'
+    )
     for i, row in enumerate(augmented_rows[:10]):
         print(f"{i+1}")
         print(f"  원본   : {row['original_text']}")
