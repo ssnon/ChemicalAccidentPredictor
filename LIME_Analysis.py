@@ -1,10 +1,4 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
-"""
-LIME analysis script for the KoBERT classifier.
-
-"""
 
 import os
 import re
@@ -12,6 +6,7 @@ import json
 import argparse
 from pathlib import Path
 
+import joblib
 import numpy as np
 import pandas as pd
 import torch
@@ -47,26 +42,13 @@ def load_stopwords(data_directory: str):
         return set(line.strip() for line in f if line.strip())
 
 
-def build_preprocessor(data_directory: str, disable_okt: bool = False):
+def build_preprocessor(data_directory: str):
     korean_stopwords = load_stopwords(data_directory)
-
-    if disable_okt:
-        okt = None
-        print("[WARN] --disable_okt is enabled. LIME input preprocessing will not exactly match training.")
-    else:
-        from konlpy.tag import Okt
-        okt = Okt()
 
     def preprocess(text):
         text = "" if pd.isna(text) else str(text)
         text = re.sub(r"\b\d+\b", "", text)
-
-        if okt is not None:
-            tokens = okt.morphs(text, stem=True)
-        else:
-            # fallback: whitespace split
-            tokens = text.split()
-
+        tokens = text.split()
         tokens = [t for t in tokens if t not in korean_stopwords]
         return " ".join(tokens)
 
@@ -109,7 +91,7 @@ def load_kobert_model(model_name: str, model_directory: str, device: str):
     return model, ckpt_path
 
 
-def make_predict_proba_fn(model, tokenizer, device: str, batch_size: int = 16, max_length: int = 128):
+def make_kobert_predict_proba_fn(model, tokenizer, device: str, batch_size: int = 16, max_length: int = 128):
 
     def predict_proba(texts):
         all_probs = []
@@ -138,36 +120,42 @@ def make_predict_proba_fn(model, tokenizer, device: str, batch_size: int = 16, m
 
     return predict_proba
 
+def make_ClassicalML_predict_proba_fn(model, vectorizer, preprocess):
+    if not hasattr(model, "predict_proba"):
+        raise ValueError("Loaded model does not support predict_proba(). For SVM, use SVC(probability=True).")
 
-def select_indices(df, selection: str, num_explain: int, seed: int):
+    def predict_proba(texts):
+        processed = [preprocess(t) for t in texts]
+        X = vectorizer.transform(processed)
+        return model.predict_proba(X)
+
+    return predict_proba
+
+def select_indices(df, selection, num_explain, seed):
+    if selection == "all":
+        return df.index.tolist()
     if selection == "first":
         return df.index[:num_explain].tolist()
-
     if selection == "random":
         return df.sample(n=min(num_explain, len(df)), random_state=seed).index.tolist()
-
     if selection == "misclassified":
         candidates = df[df["y_true"] != df["y_pred"]]
-        if len(candidates) == 0:
-            print("[WARN] No misclassified samples found. Falling back to high_confidence.")
-            return select_indices(df, "high_confidence", num_explain, seed)
         return candidates.head(num_explain).index.tolist()
-
     if selection == "correct":
         candidates = df[df["y_true"] == df["y_pred"]]
-        if len(candidates) == 0:
-            print("[WARN] No correct samples found. Falling back to first.")
-            return select_indices(df, "first", num_explain, seed)
         return candidates.head(num_explain).index.tolist()
-
     if selection == "high_confidence":
         return df.sort_values("pred_confidence", ascending=False).head(num_explain).index.tolist()
-
     if selection == "low_confidence":
         return df.sort_values("pred_confidence", ascending=True).head(num_explain).index.tolist()
-
     raise ValueError(f"Unknown selection: {selection}")
 
+def load_ClassicalML_checkpoint(model_directory, model_name):
+    path = os.path.join(model_directory, "checkpoint", f"{model_name}.joblib")
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Checkpoint not found: {path}")
+    saved = joblib.load(path)
+    return saved["model"], saved["vectorizer"], path
 
 def main():
     parser = argparse.ArgumentParser(description="LIME analysis for trained KoBERT classifier")
@@ -181,8 +169,7 @@ def main():
     parser.add_argument(
         "--selection",
         default="misclassified",
-        choices=["first", "random", "misclassified", "correct", "high_confidence", "low_confidence"],
-        type=str,
+        choices=["all", "first", "random", "misclassified", "correct", "high_confidence", "low_confidence"],
     )
     parser.add_argument("--lime_num_features", default=12, type=int)
     parser.add_argument("--lime_num_samples", default=1000, type=int)
@@ -201,7 +188,8 @@ def main():
 
     output_dir = args.output_dir
     if output_dir is None:
-        output_dir = os.path.join(args.model_directory, args.model, "lime_result")
+        output_dir = os.path.join("lime_withoutOKT", args.model_directory, "lime_result")
+        os.makedirs(output_dir, exist_ok=True)
 
     output_dir = Path(output_dir)
     html_dir = output_dir / "html"
@@ -214,9 +202,9 @@ def main():
     print("[INFO] LabelEncoder classes_ order:")
     for idx, name in enumerate(class_labels):
         print(f"Allowed labels: {class_labels}")
+    preprocess = build_preprocessor(args.data_directory)
 
     test_df = load_test_dataframe(args.data_directory, args.test_file)
-
     test_df["label"] = test_df["label"].astype(str).str.strip()
     unknown_labels = sorted(set(test_df["label"]) - set(LABEL_TO_ID.keys()))
     if unknown_labels:
@@ -224,31 +212,28 @@ def main():
             f"Test set contains labels not used by the model: {unknown_labels}\n"
             f"Allowed labels: {class_labels}"
         )
-
-    preprocess = build_preprocessor(args.data_directory, disable_okt=args.disable_okt)
-
     test_df["processed_text"] = test_df["text"].apply(preprocess)
     test_df["y_true"] = test_df["label"].map(LABEL_TO_ID).astype(int)
+    
 
-    tokenizer = AutoTokenizer.from_pretrained("skt/kobert-base-v1", use_fast=False)
-    model, ckpt_path = load_kobert_model(args.model, args.model_directory, device)
-
-    predict_proba = make_predict_proba_fn(
+    if args.model=="kobert":
+        tokenizer = AutoTokenizer.from_pretrained("skt/kobert-base-v1", use_fast=False)
+        model, ckpt_path = load_kobert_model(args.model, args.model_directory, device)
+        predict_proba = make_kobert_predict_proba_fn(
         model=model,
         tokenizer=tokenizer,
         device=device,
         batch_size=args.batch_size,
-        max_length=args.max_length,
-    )
+        max_length=args.max_length,)
+    else:
+        model, vectorizer, ckpt_path = load_ClassicalML_checkpoint(args.model_directory, args.model)
+        predict_proba = make_ClassicalML_predict_proba_fn(model, vectorizer, preprocess)
 
     probs = predict_proba(test_df["processed_text"].tolist())
-    pred_ids = probs.argmax(axis=1)
-    pred_conf = probs.max(axis=1)
-
-    test_df["y_pred"] = pred_ids
+    test_df["y_pred"] = probs.argmax(axis=1)
     test_df["true_label"] = [class_names[i] for i in test_df["y_true"]]
     test_df["pred_label"] = [class_names[i] for i in test_df["y_pred"]]
-    test_df["pred_confidence"] = pred_conf
+    test_df["pred_confidence"] = probs.max(axis=1)
 
     for class_idx, class_name in enumerate(class_names):
         test_df[f"prob_{class_name}"] = probs[:, class_idx]
@@ -312,13 +297,12 @@ def main():
 
     for rank, idx in enumerate(selected_indices, start=1):
         row = test_df.loc[idx]
-        text_for_lime = row["processed_text"]
 
         # Explain predicted class. You can also use top_labels=3 if you want all top labels.
         pred_label_idx = int(row["y_pred"])
 
         exp = explainer.explain_instance(
-            text_instance=text_for_lime,
+            text_instance=row["processed_text"],
             classifier_fn=predict_proba,
             labels=[pred_label_idx],
             num_features=args.lime_num_features,
