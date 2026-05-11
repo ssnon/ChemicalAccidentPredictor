@@ -36,7 +36,7 @@ done
 MODELS=("LR" "RF" "SVM" "XGBoost")
 for MODEL_NAME in "${MODELS[@]}"; do
   for SEED in "${SEEDS[@]}"; do
-    EXP_NAME="${MODEL_NAME}_seed_${SEED}"
+    EXP_NAME="Aug1.3_${MODEL_NAME}_seed_${SEED}"
 
     echo "========================================"
     echo "LIME: ${EXP_NAME}"
