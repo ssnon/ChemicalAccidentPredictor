@@ -176,7 +176,6 @@ def main():
     parser.add_argument("--batch_size", default=16, type=int)
     parser.add_argument("--max_length", default=128, type=int)
     parser.add_argument("--seed", default=42, type=int)
-    parser.add_argument("--disable_okt", action="store_true")
     parser.add_argument("--train_file", default="train/train.csv", type=str)
     parser.add_argument("--valid_file", default="valid/valid.csv", type=str)
 
@@ -190,7 +189,7 @@ def main():
 
     output_dir = args.output_dir
     if output_dir is None:
-        output_dir = os.path.join("lime_withoutOKT", args.model_directory, "lime_result")
+        output_dir = os.path.join("lime_result", args.model_directory, "lime_result")
         os.makedirs(output_dir, exist_ok=True)
 
     output_dir = Path(output_dir)
