@@ -40,6 +40,24 @@ parser.add_argument('--scheduler', default='linear_warmup', type=str,
 parser.add_argument('--warmup_ratio', default=0.1, type=float,
                     help='warmup ratio for linear/cosine scheduler')
 
+# ===== Classic ML hyperparameters =====
+parser.add_argument('--rf_n_estimators', default=500, type=int)
+parser.add_argument('--rf_max_depth', default=None, type=int)
+parser.add_argument('--rf_min_samples_split', default=2, type=int)
+parser.add_argument('--rf_min_samples_leaf', default=1, type=int)
+parser.add_argument('--rf_max_features', default='sqrt', type=str)
+parser.add_argument('--rf_class_weight', default='balanced', type=str)
+
+parser.add_argument('--xgb_n_estimators', default=500, type=int)
+parser.add_argument('--xgb_max_depth', default=3, type=int)
+parser.add_argument('--xgb_learning_rate', default=0.03, type=float)
+parser.add_argument('--xgb_subsample', default=0.8, type=float)
+parser.add_argument('--xgb_colsample_bytree', default=0.8, type=float)
+parser.add_argument('--xgb_min_child_weight', default=3, type=float)
+parser.add_argument('--xgb_gamma', default=0.1, type=float)
+parser.add_argument('--xgb_reg_lambda', default=2.0, type=float)
+parser.add_argument('--xgb_reg_alpha', default=0.0, type=float)
+
 args = parser.parse_args()
 utils.seed_everything(args.seed)
 
@@ -66,7 +84,7 @@ def run_kobert(trainer):
 
 def run_classicML(trainer):
     X_train, y_train, X_valid, y_valid, X_test, y_test, class_names, vectorizer = datasets.prepare_dataset_classicML(args.data_directory, args.train_file, args.valid_file, args.test_file)
-    model = models.prepare_model(args.model, device, seed=args.seed)
+    model = models.prepare_model(args.model, device, seed=args.seed, args=args)
     trainer.train(model, X_train, y_train)
     trainer.valid(model, X_valid, y_valid, class_names, args.model_directory, args.model, vectorizer)
     trainer.test(model, X_test, y_test, class_names, args.model_directory, args.model)

@@ -86,12 +86,10 @@ def data_load_and_preprocess(data_root_path, train_file_name, valid_file_name, t
         korean_stopwords = set(line.strip() for line in f)
 
     # ======= 4. 텍스트 전처리 =======
-    from konlpy.tag import Okt
-    okt = Okt()
-
     def preprocess(text):
+        text = "" if pd.isna(text) else str(text)
         text = re.sub(r'\b\d+\b', '', text)
-        tokens = okt.morphs(text, stem=True)
+        tokens = text.split()
         tokens = [t for t in tokens if t not in korean_stopwords]
         return " ".join(tokens)
 

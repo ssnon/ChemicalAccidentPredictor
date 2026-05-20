@@ -171,12 +171,14 @@ def main():
         default="misclassified",
         choices=["all", "first", "random", "misclassified", "correct", "high_confidence", "low_confidence"],
     )
-    parser.add_argument("--lime_num_features", default=12, type=int)
-    parser.add_argument("--lime_num_samples", default=1000, type=int)
+    parser.add_argument("--lime_num_features", default=25, type=int)
+    parser.add_argument("--lime_num_samples", default=2500, type=int)
     parser.add_argument("--batch_size", default=16, type=int)
     parser.add_argument("--max_length", default=128, type=int)
     parser.add_argument("--seed", default=42, type=int)
     parser.add_argument("--disable_okt", action="store_true")
+    parser.add_argument("--train_file", default="train/train.csv", type=str)
+    parser.add_argument("--valid_file", default="valid/valid.csv", type=str)
 
     args = parser.parse_args()
 
@@ -205,15 +207,18 @@ def main():
     preprocess = build_preprocessor(args.data_directory)
 
     test_df = load_test_dataframe(args.data_directory, args.test_file)
-    test_df["label"] = test_df["label"].astype(str).str.strip()
-    unknown_labels = sorted(set(test_df["label"]) - set(LABEL_TO_ID.keys()))
+    train_df = load_test_dataframe(args.data_directory, args.train_file)
+    valid_df = load_test_dataframe(args.data_directory, args.valid_file)
+    whole_df = np.concat(test_df, train_df, valid_df)
+    whole_df["label"] = whole_df["label"].astype(str).str.strip()
+    unknown_labels = sorted(set(whole_df["label"]) - set(LABEL_TO_ID.keys()))
     if unknown_labels:
         raise ValueError(
             f"Test set contains labels not used by the model: {unknown_labels}\n"
             f"Allowed labels: {class_labels}"
         )
-    test_df["processed_text"] = test_df["text"].apply(preprocess)
-    test_df["y_true"] = test_df["label"].map(LABEL_TO_ID).astype(int)
+    whole_df["processed_text"] = whole_df["text"].apply(preprocess)
+    whole_df["y_true"] = whole_df["label"].map(LABEL_TO_ID).astype(int)
     
 
     if args.model=="kobert":
@@ -229,28 +234,28 @@ def main():
         model, vectorizer, ckpt_path = load_ClassicalML_checkpoint(args.model_directory, args.model)
         predict_proba = make_ClassicalML_predict_proba_fn(model, vectorizer, preprocess)
 
-    probs = predict_proba(test_df["processed_text"].tolist())
-    test_df["y_pred"] = probs.argmax(axis=1)
-    test_df["true_label"] = [class_names[i] for i in test_df["y_true"]]
-    test_df["pred_label"] = [class_names[i] for i in test_df["y_pred"]]
-    test_df["pred_confidence"] = probs.max(axis=1)
+    probs = predict_proba(whole_df["processed_text"].tolist())
+    whole_df["y_pred"] = probs.argmax(axis=1)
+    whole_df["true_label"] = [class_names[i] for i in whole_df["y_true"]]
+    whole_df["pred_label"] = [class_names[i] for i in whole_df["y_pred"]]
+    whole_df["pred_confidence"] = probs.max(axis=1)
 
     for class_idx, class_name in enumerate(class_names):
         test_df[f"prob_{class_name}"] = probs[:, class_idx]
 
     # Save overall prediction results
     pred_csv_path = output_dir / "test_predictions_for_lime.csv"
-    test_df.to_csv(pred_csv_path, index=False, encoding="utf-8-sig")
+    whole_df.to_csv(pred_csv_path, index=False, encoding="utf-8-sig")
 
-    acc = accuracy_score(test_df["y_true"], test_df["y_pred"])
+    acc = accuracy_score(whole_df["y_true"], whole_df["y_pred"])
     report = classification_report(
-        test_df["y_true"],
-        test_df["y_pred"],
+        whole_df["y_true"],
+        whole_df["y_pred"],
         target_names=class_names,
         digits=4,
         zero_division=0,
     )
-    cm = confusion_matrix(test_df["y_true"], test_df["y_pred"])
+    cm = confusion_matrix(whole_df["y_true"], whole_df["y_pred"])
 
     summary = {
         "checkpoint_path": ckpt_path,
@@ -290,13 +295,13 @@ def main():
         random_state=args.seed,
     )
 
-    selected_indices = select_indices(test_df, args.selection, args.num_explain, args.seed)
+    selected_indices = select_indices(whole_df, args.selection, args.num_explain, args.seed)
     lime_rows = []
 
     print(f"[INFO] Explaining {len(selected_indices)} samples with LIME...")
 
     for rank, idx in enumerate(selected_indices, start=1):
-        row = test_df.loc[idx]
+        row = whole_df.loc[idx]
 
         # Explain predicted class. You can also use top_labels=3 if you want all top labels.
         pred_label_idx = int(row["y_pred"])
@@ -311,8 +316,8 @@ def main():
 
         safe_true = str(row["true_label"]).replace("/", "_")
         safe_pred = str(row["pred_label"]).replace("/", "_")
-        html_path = html_dir / f"lime_idx_{idx}_true_{safe_true}_pred_{safe_pred}.html"
-        exp.save_to_file(str(html_path))
+        #html_path = html_dir / f"lime_idx_{idx}_true_{safe_true}_pred_{safe_pred}.html"
+        #exp.save_to_file(str(html_path))
 
         weights = exp.as_list(label=pred_label_idx)
 
@@ -326,7 +331,6 @@ def main():
                 "pred_label": row["pred_label"],
                 "pred_confidence": float(row["pred_confidence"]),
                 "is_correct": bool(row["y_true"] == row["y_pred"]),
-                "html_path": str(html_path),
                 "raw_text": row["text"],
                 "processed_text": row["processed_text"],
             })
@@ -334,7 +338,6 @@ def main():
         print(
             f"[{rank}/{len(selected_indices)}] idx={idx}, "
             f"true={row['true_label']}, pred={row['pred_label']}, "
-            f"conf={row['pred_confidence']:.4f}, html={html_path}"
         )
 
     lime_df = pd.DataFrame(lime_rows)
