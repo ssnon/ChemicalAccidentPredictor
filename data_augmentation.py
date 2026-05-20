@@ -25,8 +25,6 @@ parser.add_argument('--semantic_sim_threshold_lowerbound', default=0.90, type=fl
                     help='augmentation acceptance threshold')
 parser.add_argument('--surface_sim_threshold_upperbound', default=0.96, type=float,
                     help='augmentation acceptance threshold')
-parser.add_argument('--surface_sim_threshold_lowerbound', default=0.70, type=float,
-                    help='augmentation acceptance threshold')
 
 args = parser.parse_args()
 # CSV 파일 로드
@@ -273,8 +271,8 @@ def IntegrityTest_for_augmentedData(original_text, augemented_text):
     if semantic_sim < args.semantic_sim_threshold_lowerbound:
         return False, f"similarity too low: {semantic_sim}"
 
-    # 문장 표면상의 유사도가 너무 높으면 (띄어쓰기 하나 바꾸기, 조사 하나 바꾸기 등), 혹은 지나치게 낮으면 reject
-    if surface_sim > args.surface_sim_threshold_upperbound or surface_sim < args.surface_sim_threshold_lowerbound:
+    # 문장 표면상의 유사도가 너무 높으면 (띄어쓰기 하나 바꾸기, 조사 하나 바꾸기 등) reject
+    if surface_sim > args.surface_sim_threshold_upperbound:
         return False, f"similarity too high: {surface_sim}"
 
     # 문장 길이 크게 달라지면 reject
